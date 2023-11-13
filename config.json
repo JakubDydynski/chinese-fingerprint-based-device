@@ -1,0 +1,26 @@
+{
+    "version": 2,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20
+    },
+    "configurePresets": [
+        {
+            "name": "build",
+            "displayName": "Build for NRF5340 DK NRF5340 application MCU Non Secure",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "NCS_TOOLCHAIN_VERSION": "NONE",
+                "BOARD": "nrf5340dk_nrf5340_cpuapp_ns",
+                "CONFIG_DEBUG_OPTIMIZATIONS": "y",
+                "CONFIG_DEBUG_THREAD_INFO": "y",
+                "CONF_FILE": "${sourceDir}/prj.conf",
+                "DTC_OVERLAY_FILE": "${sourceDir}/nrf5340dk_nrf5340_cpuapp_ns.overlay"
+            }
+        }
+    ]
+}
+
+//draft
+// TODO: create config to easily share project build
