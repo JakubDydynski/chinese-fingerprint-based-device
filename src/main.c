@@ -8,16 +8,29 @@
 #include <zephyr/drivers/gpio.h>
 
 /* 1000 msec = 1 sec */
-#define SLEEP_TIME_MS   500
+#define SLEEP_TIME_MS   2000
 
 /* The devicetree node identifier for the "led0" alias. */
 #define LED0_NODE DT_ALIAS(led0)
 
-/*
- * A build error on this line means your board is unsupported.
- * See the sample documentation for information on how to fix this.
- */
+/* size of stack area used by each thread */
+#define STACKSIZE 1024
+
+/* scheduling priority used by each thread */
+#define PRIORITY 7
+
+
+
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+
+void print_basic_sensor_info(void){
+	while(1){
+		printk("Hello World! %s\n", CONFIG_BOARD);
+		k_sleep(K_FOREVER);
+	}
+}
+K_THREAD_DEFINE(print_basic_sensor_info_id, STACKSIZE, print_basic_sensor_info, NULL, NULL, NULL,
+		PRIORITY, 0, 0);
 
 void main(void)
 {
@@ -38,5 +51,8 @@ void main(void)
 			return;
 		}
 		k_msleep(SLEEP_TIME_MS);
+		k_wakeup(print_basic_sensor_info_id);
 	}
 }
+
+
