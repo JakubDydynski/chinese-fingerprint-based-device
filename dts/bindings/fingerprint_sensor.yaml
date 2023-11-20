@@ -1,0 +1,17 @@
+
+# Copyright (c) 2020 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Chinese fingerprint sensor.  See more info at: kaz ro
+
+
+include: [sensor-device.yaml, uart-device.yaml]
+
+compatible: "fingerprint_sensor"
+
+properties:
+  irq-gpios:
+    type: phandle-array
+    description: |
+      The INT1 and (optional) INT2 signal connections.
