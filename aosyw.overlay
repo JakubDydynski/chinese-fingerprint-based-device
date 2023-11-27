@@ -1,17 +1,29 @@
-#include "nrf5340_cpuapp_common.dts"
 
+// #include "nrf5340_cpuapp_common-pinctrl.dtsi"
 
+/ {
 
-&uart0 {
-	status = "okay";
-    fingerprint_sensor {
-        compatible = "fingerprint_sensor", 
-        irq-gpios = <&gpio0 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>,
-                    <&gpio0 3 (GPIO_ACTIVE_LOW)>;
-        current-speed = <115200>;
+    aliases {
+        uartdebug = &uart1;
     };
+
 };
-&
+
+
+&uart1 {
+	status = "okay";
+};
+
+
+// &uart0 {
+// 	status = "okay";
+//     fingerprint_sensor {
+//         compatible = "fingerprint_sensor";
+//         irq-gpios = <&gpio0 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>,
+//                     <&gpio0 3 (GPIO_ACTIVE_LOW)>;
+//         current-speed = <115200>;
+//     };
+// };
 
 
 // &arduino_spi {
