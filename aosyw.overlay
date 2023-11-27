@@ -1,3 +1,7 @@
+#include "nrf5340_cpuapp_common.dts"
+
+
+
 &uart0 {
 	status = "okay";
     fingerprint_sensor {
@@ -7,6 +11,7 @@
         current-speed = <115200>;
     };
 };
+&
 
 
 // &arduino_spi {
