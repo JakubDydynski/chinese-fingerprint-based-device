@@ -31,8 +31,9 @@ typedef struct{
 typedef struct{
     struct device * uart;
 }sensor_t;
+
 // Your code goes here
-status_t sensor_send_command(frame_header_t* header, transmission_frame_t* content, sensor_t* sensor);
+status_t sensor_send_command(sensor_t* sensor, frame_header_t* header, transmission_frame_t* content);
 status_t sensor_receive_response(frame_header_t* header, response_frame_t* content);
 status_t sensor_init(sensor_t* sensor);
 #endif // FINGERPRINT_SENSOR_H

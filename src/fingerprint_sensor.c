@@ -12,7 +12,12 @@ void send_uart(char *buf, int n, const struct device *const uart_device)
 	}
 }
 
-status_t sensor_send_command(frame_header_t* header, transmission_frame_t* content, sensor_t* sensor)
+// trzeba bedzie się podpiąć do DT_INST_FOREACH_STATUS_OKAY(BMI270_CREATE_INST), przykład drivera bmi 270
+// 1. driver jest uruchamiany przed aplikacją
+// 2. driver znajduje się w innej przestrzeni uprawnień niż aplikacja
+// TODO: const struct device *dev 
+// TODO: analizator ramek, interpretuje i wysyła wyżej
+status_t sensor_send_command(sensor_t* sensor, frame_header_t* header, transmission_frame_t* content)
 {
 	// header
 	send_uart((char*)header, sizeof(header), sensor->uart);
