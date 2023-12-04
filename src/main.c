@@ -11,18 +11,9 @@
 
 #include <string.h>
 #include <zephyr/logging/log.h>
+#include "fingerprint_sensor.h"
 
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
-
-typedef enum status{
-	OK,
-	ERROR
-}status_t;
-
-status_t sensor_init(void){
-	return OK;
-}
-
 
 /* change this to any other UART peripheral if desired */
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
@@ -65,7 +56,6 @@ static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,
 static struct gpio_callback button0_cb_data, button1_cb_data;
 static char rx_buf[MSG_SIZE];
 static int rx_buf_pos;
-char command[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
 /*
  * Read characters from UART until line end is detected. Afterwards push the
  * data to the message queue.
@@ -74,7 +64,10 @@ char command[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x
 void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
 {
-	send_uart(command, sizeof(command), uart_sensor);
+	sensor_t sensor;
+	sensor.uart = uart_sensor;
+	sensor_init(&sensor);
+	// send_uart(command, sizeof(command), uart_sensor);
 }
 
 void button1_pressed(const struct device *dev, struct gpio_callback *cb,
@@ -104,15 +97,15 @@ void serial_cb(const struct device *dev, void *user_data)
 	}
 }
 
-/*
- * send a null-terminated string character by character to the UART interface
- */
-void send_uart(char *buf, int n, const struct device *const uart_device)
-{
-	for (int i = 0; i < n; i++) {
-		uart_poll_out(uart_device, buf[i]);
-	}
-}
+// /*
+//  * send a null-terminated string character by character to the UART interface
+//  */
+// void send_uart(char *buf, int n, const struct device *const uart_device)
+// {
+// 	for (int i = 0; i < n; i++) {
+// 		uart_poll_out(uart_device, buf[i]);
+// 	}
+// }
 
 void print_basic_sensor_info(void){
 	while(1){
