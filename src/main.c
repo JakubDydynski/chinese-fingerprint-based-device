@@ -155,7 +155,7 @@ void main(void)
 	}
 
 	if (!device_is_ready(uart_sensor)) {
-		printf("UART device not found!\r\n");
+		printk("UART device not found!\r\n");
 		return;
 	} else {
 		printk("UART_dbg device found!\r\n");
@@ -198,7 +198,7 @@ void btn_init()
 	int ret;
 	if (!device_is_ready(button0.port))
 	{
-		printf("Error: button device %s is not ready\n",
+		printk("Error: button device %s is not ready\n",
 			   button0.port->name);
 		return;
 	}
@@ -206,7 +206,7 @@ void btn_init()
 	ret = gpio_pin_configure_dt(&button0, GPIO_INPUT);
 	if (ret != 0)
 	{
-		printf("Error %d: failed to configure %s pin %d\n",
+		printk("Error %d: failed to configure %s pin %d\n",
 			   ret, button0.port->name, button0.pin);
 		return;
 	}
@@ -215,14 +215,14 @@ void btn_init()
 										  GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret != 0)
 	{
-		printf("Error %d: failed to configure interrupt on %s pin %d\n",
+		printk("Error %d: failed to configure interrupt on %s pin %d\n",
 			   ret, button0.port->name, button0.pin);
 		return;
 	}
 
 	if (!device_is_ready(button1.port))
 	{
-		printf("Error: button device %s is not ready\n",
+		printk("Error: button device %s is not ready\n",
 			   button1.port->name);
 		return;
 	}
@@ -230,7 +230,7 @@ void btn_init()
 	ret = gpio_pin_configure_dt(&button1, GPIO_INPUT);
 	if (ret != 0)
 	{
-		printf("Error %d: failed to configure %s pin %d\n",
+		printk("Error %d: failed to configure %s pin %d\n",
 			   ret, button1.port->name, button1.pin);
 		return;
 	}
@@ -239,7 +239,7 @@ void btn_init()
 										  GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret != 0)
 	{
-		printf("Error %d: failed to configure interrupt on %s pin %d\n",
+		printk("Error %d: failed to configure interrupt on %s pin %d\n",
 			   ret, button1.port->name, button1.pin);
 		return;
 	}
@@ -249,11 +249,11 @@ void btn_callback_config()
 {
 	gpio_init_callback(&button0_cb_data, button0_pressed, BIT(button0.pin));
 	gpio_add_callback(button0.port, &button0_cb_data);
-	printf("Set up button at %s pin %d\n", button0.port->name, button0.pin);
+	printk("Set up button at %s pin %d\n", button0.port->name, button0.pin);
 
 	gpio_init_callback(&button1_cb_data, button1_pressed, BIT(button1.pin));
 	gpio_add_callback(button1.port, &button1_cb_data);
-	printf("Set up button at %s pin %d\n", button1.port->name, button1.pin);
+	printk("Set up button at %s pin %d\n", button1.port->name, button1.pin);
 }
 
 
