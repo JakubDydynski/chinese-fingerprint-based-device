@@ -1,7 +1,7 @@
 #include "fingerprint_sensor.h"
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/uart.h>
-
+#include <zephyr/devicetree.h>
 
 static char command[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
 /*
@@ -90,11 +90,14 @@ static int M080R_bus_check_uart(const struct uart_dt_spec* uart)
 	return uart_is_ready_dt(uart) ? 0 : -ENODEV;
 }
 
-static int M080R_reg_read_uart(const union M080R_bus *bus,
-			       uint8_t start, uint8_t *data, uint16_t len)
+static int M080R_reg_read_uart(const struct uart_dt_spec* uart, int8_t start, uint8_t *data, uint16_t len)
 {
 	int ret;
 	uint8_t addr;
+	const struct device *uart_dev = device_from_uart_spec(uart);
+	for (int i = 0; i < len; i++) {
+		uart_poll_out(uart_dev, data[i]);
+	}
 
 	k_usleep(M080R_uart_ACC_DELAY_US);
 	return 0;
@@ -325,7 +328,7 @@ static const struct sensor_driver_api M080R_driver_api = {
 									\
 	static const struct M080R_config M080R_config_##inst =	\
 		COND_CODE_1(DT_INST_ON_BUS(inst, uart),			\
-			    (M080R_CONFIG_uart(inst)); \
+			    (M080R_CONFIG_uart(inst))); \
 									\
 	SENSOR_DEVICE_DT_INST_DEFINE(inst,				\
 			      M080R_init,				\

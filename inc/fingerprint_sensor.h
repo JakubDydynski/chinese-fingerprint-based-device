@@ -69,6 +69,7 @@ typedef enum status{
 	ERROR
 }status_t;
 
+// struktury te 3 trzeba spakować do jednej
 typedef struct  __attribute__((__packed__)){
 	uint8_t header[8];
 	uint16_t length;
@@ -90,6 +91,14 @@ typedef struct{
 	uint8_t* data;
 	uint8_t checksum;
 }response_frame_t;
+
+ struct M080R_data
+ {
+	frame_header_t header;
+	transmission_frame_t content;
+	response_frame_t response;
+ };
+ 
 
 typedef struct{
     struct device * uart;
