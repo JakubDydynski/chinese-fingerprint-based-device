@@ -1,5 +1,68 @@
 #ifndef FINGERPRINT_SENSOR_H
 #define FINGERPRINT_SENSOR_H
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      includes                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+#include <zephyr/device.h>
+#include <zephyr/sys/util.h>
+#include <zephyr/types.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/kernel.h>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       defines                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+#define M080R_REG_CHIP_ID         0x00
+#define M080R_REG_ERROR           0x02
+#define M080R_REG_STATUS          0x03
+#define M080R_REG_AUX_X_LSB       0x04
+
+#define M080R_uart_ACC_DELAY_US	  500
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       macros                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+#define M080R_SET_BITS(reg_data, bitname, data)		  \
+	((reg_data & ~(bitname##_MSK)) | ((data << bitname##_POS) \
+					  & bitname##_MSK))
+#define M080R_SET_BITS_POS_0(reg_data, bitname, data) \
+	((reg_data & ~(bitname##_MSK)) | (data & bitname##_MSK))
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        types                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+struct M080R_data {
+	int16_t ax, ay, az, gx, gy, gz;
+	uint8_t acc_range, acc_odr, gyr_odr;
+	uint16_t gyr_range;
+};
+
+typedef int (*M080R_bus_check_fn)();
+typedef int (*M080R_bus_init_fn)();
+typedef int (*M080R_reg_read_fn)(
+				  uint8_t start,
+				  uint8_t *data,
+				  uint16_t len);
+typedef int (*M080R_reg_write_fn)(
+				   uint8_t start,
+				   const uint8_t *data,
+				   uint16_t len);
+
+
+struct M080R_bus_io {
+	M080R_bus_check_fn check;
+	M080R_reg_read_fn read;
+	M080R_reg_write_fn write;
+	M080R_bus_init_fn init;
+};
+
+extern const struct M080R_bus_io M080R_bus_io_uart;
+
+
+
+
 #include <zephyr/kernel.h>
 typedef enum status{
 	OK,
