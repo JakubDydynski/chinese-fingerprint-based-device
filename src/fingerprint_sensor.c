@@ -96,7 +96,6 @@ static int M080R_reg_read_uart(const union M080R_bus *bus,
 	int ret;
 	uint8_t addr;
 
-
 	k_usleep(M080R_uart_ACC_DELAY_US);
 	return 0;
 }
@@ -106,22 +105,6 @@ static int M080R_reg_write_uart(const union M080R_bus *bus, uint8_t start,
 {
 	int ret;
 	uint8_t addr;
-	const struct uart_buf tx_buf[2] = {
-		{.buf = &addr, .len = sizeof(addr)},
-		{.buf = (uint8_t *)data, .len = len}
-	};
-	const struct uart_buf_set tx = {
-		.buffers = tx_buf,
-		.count = ARRAY_SIZE(tx_buf)
-	};
-
-	addr = start & M080R_REG_MASK;
-
-	ret = uart_write_dt(&bus->uart, &tx);
-	if (ret < 0) {
-		LOG_ERR("uart_write_dt failed %i", ret);
-		return ret;
-	}
 
 	k_usleep(M080R_uart_ACC_DELAY_US);
 	return 0;
@@ -342,8 +325,7 @@ static const struct sensor_driver_api M080R_driver_api = {
 									\
 	static const struct M080R_config M080R_config_##inst =	\
 		COND_CODE_1(DT_INST_ON_BUS(inst, uart),			\
-			    (M080R_CONFIG_uart(inst)),			\
-			    (M080R_CONFIG_I2C(inst)));			\
+			    (M080R_CONFIG_uart(inst)); \
 									\
 	SENSOR_DEVICE_DT_INST_DEFINE(inst,				\
 			      M080R_init,				\
