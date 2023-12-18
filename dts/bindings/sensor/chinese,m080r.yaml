@@ -6,12 +6,16 @@ description: |
   Chinese fingerprint sensor.  See more info at: kaz ro
 
 
-include: [sensor-device.yaml, uart-device.yaml]
+compatible: "chinese,m080r"
 
-compatible: "fingerprint_sensor"
-
+include: base.yaml
 properties:
-  irq-gpios:
+  uart-parent-node:
+    type: phandle
+    description: |
+      phandle to the parent UART node.
+  input-gpios:
     type: phandle-array
+    required: false
     description: |
       The INT1 and (optional) INT2 signal connections.
