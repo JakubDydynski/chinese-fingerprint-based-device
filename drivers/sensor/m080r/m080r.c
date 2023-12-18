@@ -61,7 +61,7 @@ struct m080r_config {
     struct device * uart;
 };
 
-void print_response(char *buf, int n)
+static void print_response(char *buf, int n)
 {
 	for (int i = 0; i < n; i++)
 	{
@@ -70,14 +70,14 @@ void print_response(char *buf, int n)
 	printk("\n");
 }
 
-void send_uart(char *buf, int n, const struct device *const uart_device)
+static void send_uart(char *buf, int n, const struct device *const uart_device)
 {
 	for (int i = 0; i < n; i++) {
 		uart_poll_out(uart_device, buf[i]);
 	}
 }
 
-void serial_cb(const struct device *dev, void *user_data)
+static void serial_cb(const struct device *dev, void *user_data)
 {
 	uint8_t c;
 
@@ -149,17 +149,17 @@ static int m080r_init(const struct device *dev)
 	return 0;
 }
 
-#define M080R_INIT(i)						       \
-	static struct m080r_data m080r_data_##i;	       \
-									       \
-	static const struct m080r_config m080r_config_##i = {  \
-		.input = GPIO_DT_SPEC_INST_GET(i, input_gpios),		       \
-        .uart = DT_INST_PHANDLE(i,uart_parent_node), \
-	};								       \
-									       \
-	DEVICE_DT_INST_DEFINE(i, m080r_init, NULL,		       \
-			      &m080r_data_##i,			       \
-			      &m080r_config_##i, POST_KERNEL,	       \
+#define M080R_INIT(i)						       					\
+	static struct m080r_data m080r_data_##i;	       				\
+									       							\
+	static const struct m080r_config m080r_config_##i = {  			\
+		.input = GPIO_DT_SPEC_INST_GET(i, input_gpios),		       	\
+        .uart = DT_INST_PHANDLE(i,uart_parent_node),				\
+	};								       							\
+									       							\
+	DEVICE_DT_INST_DEFINE(i, m080r_init, NULL,		       			\
+			      &m080r_data_##i,			       					\
+			      &m080r_config_##i, POST_KERNEL,	       			\
 			      CONFIG_SENSOR_INIT_PRIORITY, &m080r_api);
 
 DT_INST_FOREACH_STATUS_OKAY(M080R_INIT)

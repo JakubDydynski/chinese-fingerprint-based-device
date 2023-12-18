@@ -1,19 +1,18 @@
 
-// #include "nrf5340_cpuapp_common-pinctrl.dtsi"
-
-/ {
-
-    aliases {
-        uartdebug = &uart1;
-    };
-
-};
-
-
 &uart1 {
-	status = "okay";
+    status = "okay";
     current-speed = <57600>;
 };
+
+/ {
+	m080r0: m080r_0 {
+		compatible = "chinese,m080r";
+        uart-parent-node = <&uart1>;   
+	};
+};
+
+
+
 
 // &pinctrl {
 //     uart1_default: uart1_default {

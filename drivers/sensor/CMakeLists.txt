@@ -1,1 +1,1 @@
-add_subdirectory_ifdef(CONFIG_M080R m080r)
+add_subdirectory_ifdef(CONFIG_M080R_SENSOR m080r)
