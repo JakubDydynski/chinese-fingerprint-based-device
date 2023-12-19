@@ -6,8 +6,9 @@
 
 / {
 	m080r0: m080r_0 {
-		compatible = "chinese,m080r";
-        uart-parent-node = <&uart1>;   
+		compatible = "chinese,m080r"; 
+        uart-node = <&uart1>;
+        irq-gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 	};
 };
 

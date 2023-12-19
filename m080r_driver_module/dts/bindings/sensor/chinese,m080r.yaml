@@ -8,14 +8,14 @@ description: |
 
 compatible: "chinese,m080r"
 
-include: base.yaml
+include: sensor-device.yaml
 properties:
-  uart-parent-node:
+  uart-node:
     type: phandle
-    description: |
-      phandle to the parent UART node.
-  input-gpios:
-    type: phandle-array
-    required: false
+    required: true
     description: |
       The INT1 and (optional) INT2 signal connections.
+  irq-gpios:
+    type: phandle-array
+    description: |
+          The INT1 and (optional) INT2 signal connections.

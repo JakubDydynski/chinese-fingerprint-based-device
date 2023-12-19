@@ -57,7 +57,7 @@ typedef struct{
 
 
 struct m080r_config {
-	struct gpio_dt_spec input;
+	struct gpio_dt_spec int_gpios;
     struct device * uart;
 };
 
@@ -107,7 +107,7 @@ static int m080r_sample_fetch(const struct device *dev,
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
     struct device * uart_device = config->uart;
-
+	//for testing purposes only
     send_uart(heartbeat_command, sizeof(heartbeat_command), uart_device);
     k_msgq_get(&uart_msgq, &tx_buf, K_FOREVER);
     print_response(tx_buf, MSG_SIZE);
@@ -153,8 +153,8 @@ static int m080r_init(const struct device *dev)
 	static struct m080r_data m080r_data_##i;	       				\
 									       							\
 	static const struct m080r_config m080r_config_##i = {  			\
-		.input = GPIO_DT_SPEC_INST_GET(i, input_gpios),		       	\
-        .uart = DT_INST_PHANDLE(i,uart_parent_node),				\
+		.uart = DEVICE_DT_GET(DT_INST_PHANDLE(i,uart_node)),		\
+		.int_gpios = GPIO_DT_SPEC_INST_GET(i, irq_gpios),			\
 	};								       							\
 									       							\
 	DEVICE_DT_INST_DEFINE(i, m080r_init, NULL,		       			\

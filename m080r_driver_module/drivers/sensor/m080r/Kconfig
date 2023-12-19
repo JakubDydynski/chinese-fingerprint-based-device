@@ -1,10 +1,9 @@
 # Copyright (c) 2021 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
 
-config M080R_SENSOR
+config M080R
 	bool "M080R sensor"
 	default y
-	depends on DT_HAS_ZEPHYR_M080R_SENSOR_ENABLED
-	select GPIO
+	depends on DT_HAS_CHINESE_M080R_ENABLED
 	help
 	  Enable M080R sensor

@@ -1,0 +1,5 @@
+menu "Our AOSYW M080r Driver"
+
+rsource "drivers/Kconfig"
+
+endmenu
