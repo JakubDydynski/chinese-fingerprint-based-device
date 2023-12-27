@@ -39,7 +39,6 @@ void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
 {
 	flag_get = 1;
-	// printk("Sensor value: %d\n", val.val1);
 }
 
 void print_basic_sensor_info(void)
@@ -76,6 +75,7 @@ void main(void)
 		// if (ret < 0) {
 		// 	printk("Could not fetch sample (%d)", ret);
 		// }
+
 		if (flag_get == 1) {
 			flag_get = 0;
 			struct sensor_value val;
