@@ -6,3 +6,6 @@ PIN 3:  3v3
 PIN 4:  P1.00
 PIN 5:  P1.01
 PIN 6:  GND
+
+com4 - host 
+com5 - 
