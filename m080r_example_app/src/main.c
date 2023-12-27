@@ -34,6 +34,7 @@ int flag_get = 0;
 void button1_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
 {
+	flag_get = 2;
 }
 void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
@@ -76,14 +77,42 @@ void main(void)
 		// 	printk("Could not fetch sample (%d)", ret);
 		// }
 
+		struct sensor_value val;
 		if (flag_get == 1) {
 			flag_get = 0;
-			struct sensor_value val;
+			printk("register: \n");
 			ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
 			if (ret < 0) {
 				LOG_ERR("Could not get sample (%d)", ret);
 				return 0;
 			}
+
+			printk("save: \n");
+			ret = sensor_attr_set(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			if (ret < 0) {
+				LOG_ERR("Could not get sample (%d)", ret);
+				return 0;
+			}
+			printk("id of saved sensor: %d\n", val.val1);
+
+			printk("match: \n");
+			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			if (ret < 0) {
+				LOG_ERR("Could not get sample (%d)", ret);
+				return 0;
+			}
+			printk("id of matched sensor: %d\n", val.val1);
+		}
+		else if (flag_get == 2)
+		{
+			flag_get = 0;
+			rintk("match: \n");
+			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			if (ret < 0) {
+				LOG_ERR("Could not get sample (%d)", ret);
+				return 0;
+			}
+			printk("id of matched sensor: %d\n", val.val1);
 		}
 		k_sleep(K_MSEC(1000));
 		
