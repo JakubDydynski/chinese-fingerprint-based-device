@@ -96,7 +96,7 @@ void main(void)
 			printk("id of saved sensor: %d\n", val.val1);
 
 			printk("match: \n");
-			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val); // TODO: dodać własne enumy do tego sensora, a nie jakiś syf
 			if (ret < 0) {
 				LOG_ERR("Could not get sample (%d)", ret);
 				return 0;
@@ -106,7 +106,7 @@ void main(void)
 		else if (flag_get == 2)
 		{
 			flag_get = 0;
-			rintk("match: \n");
+			printk("match: \n");
 			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
 			if (ret < 0) {
 				LOG_ERR("Could not get sample (%d)", ret);
