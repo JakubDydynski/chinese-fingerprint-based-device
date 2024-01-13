@@ -1,7 +1,7 @@
 Schemat podlaczenia modulu fingerprint do nrf5340dk:
 
 PIN 1:  3v3
-PIN 2:  nc
+PIN 2:  P0.24
 PIN 3:  3v3
 PIN 4:  P1.00
 PIN 5:  P1.01

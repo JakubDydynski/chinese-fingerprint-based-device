@@ -138,7 +138,7 @@ do {\
 } while(0)
 #define GET_RESPONSE_AND_PRINT() \
 do {\
-	k_msgq_get(&uart_msgq, &tx_buf, K_FOREVER);\
+	k_msgq_get(&uart_msgq, &tx_buf, K_MSEC(2000));\
 	print_response(tx_buf, current_rx_data_size);\
 } while(0)
 
@@ -311,11 +311,42 @@ static int m080r_match_fingerprint(const struct device *dev,
 	return 0;
 }
 
+static int m080r_sleep(const struct device *dev,
+				    const struct sensor_trigger *trig,
+				    sensor_trigger_handler_t handler)
+{
+
+	const struct m080r_config *config = dev->config;
+	struct m080r_data *data = dev->data;
+    struct device * uart_device = config->uart;
+	(void)trig;
+	(void)handler;
+
+	/* ------------------------------------------------ sleep fingerprint ----------------------------------------------- */
+
+	prepare_header(data, 0x08);
+	// set_command(data, 0x21, MSG_SIZE_0DATA);
+	data->content.command[0] = 0x02;	
+	data->content.command[1] = 0x0C;
+	current_rx_data_size = MSG_SIZE_0DATA;
+	uint8_t data_buff[] = {0x00};
+	set_data(data, data_buff, sizeof(data_buff));
+	calc_checksum(data);
+
+	SENT_HEADER();
+	SENT_APP_DATA();
+	GET_RESPONSE_AND_PRINT();
+
+	k_sleep(K_MSEC(1000));
+	return 0;
+}
+
 static const struct sensor_driver_api m080r_api = {
 	.sample_fetch = &m080r_sample_fetch,
 	.channel_get = &m080r_register_fingerprint,
 	.attr_get = &m080r_match_fingerprint,
 	.attr_set = &m080r_fingerprint_save,
+	.trigger_set = &m080r_sleep,
 };
 
 static int m080r_init(const struct device *dev)

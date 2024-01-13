@@ -9,7 +9,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
-
+#include <zephyr/irq.h>
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
 
 /* 1000 msec = 1 sec */
@@ -23,14 +23,24 @@ LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
 
 #define SW0_NODE DT_ALIAS(sw0)
 #define SW1_NODE DT_ALIAS(sw1)
+// #define SW_FP_NODE DT_ALIAS(sw2)
 static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET_OR(SW0_NODE, gpios,
 															   {0});
 static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,
 															   {0});
-static struct gpio_callback button0_cb_data, button1_cb_data;	
+// static const struct gpio_dt_spec button_fp = GPIO_DT_SPEC_GET_OR(SW_FP_NODE, gpios,{0});
+static struct gpio_callback button0_cb_data, button1_cb_data, button_fp_cb_data;;	
 int ret;
 const struct device *sensor;
+unsigned int key;
 int flag_get = 0;
+// void button_fp_pressed(const struct device *dev, struct gpio_callback *cb,
+// 					 uint32_t pins)
+// {
+// 	//key = irq_lock();
+// 	// irq_disable();
+// 	flag_get = 3;
+// }
 void button1_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
 {
@@ -66,7 +76,7 @@ void main(void)
 	if (!device_is_ready(sensor)) {
 		printk("Sensor not ready");
 	} else {
-		printk("SENDOR READY!");
+		printk("SENDOR READY!\n");
 	}
 
 
@@ -80,28 +90,34 @@ void main(void)
 		struct sensor_value val;
 		if (flag_get == 1) {
 			flag_get = 0;
-			printk("register: \n");
-			ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
-			if (ret < 0) {
-				LOG_ERR("Could not get sample (%d)", ret);
-				return 0;
-			}
+			// printk("register: \n");
+			// ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
+			// if (ret < 0) {
+			// 	LOG_ERR("Could not get sample (%d)", ret);
+			// 	return 0;
+			// }
 
-			printk("save: \n");
-			ret = sensor_attr_set(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
-			if (ret < 0) {
-				LOG_ERR("Could not get sample (%d)", ret);
-				return 0;
-			}
-			printk("id of saved sensor: %d\n", val.val1);
+			// printk("save: \n");
+			// ret = sensor_attr_set(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			// if (ret < 0) {
+			// 	LOG_ERR("Could not get sample (%d)", ret);
+			// 	return 0;
+			// }
+			// printk("id of saved sensor: %d\n", val.val1);
 
-			printk("match: \n");
-			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val); // TODO: dodać własne enumy do tego sensora, a nie jakiś syf
+			// printk("match: \n");
+			// ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val); // TODO: dodać własne enumy do tego sensora, a nie jakiś syf
+			// if (ret < 0) {
+			// 	LOG_ERR("Could not get sample (%d)", ret);
+			// 	return 0;
+			// }
+			// printk("id of matched sensor: %d\n", val.val1);
+			printk("sleep: \n");
+			ret = sensor_trigger_set(sensor, NULL, NULL);
 			if (ret < 0) {
-				LOG_ERR("Could not get sample (%d)", ret);
+				LOG_ERR("Could not set trigger (%d)", ret);
 				return 0;
 			}
-			printk("id of matched sensor: %d\n", val.val1);
 		}
 		else if (flag_get == 2)
 		{
@@ -112,8 +128,43 @@ void main(void)
 				LOG_ERR("Could not get sample (%d)", ret);
 				return 0;
 			}
-			printk("id of matched sensor: %d\n", val.val1);
+			if (val.val1 == 0)
+			{
+				printk("no match\n");
+							printk("register: \n");
+				ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
+				if (ret < 0) {
+					LOG_ERR("Could not get sample (%d)", ret);
+					return 0;
+				}
+
+				printk("save: \n");
+				ret = sensor_attr_set(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+				if (ret < 0) {
+					LOG_ERR("Could not get sample (%d)", ret);
+					return 0;
+				}
+				printk("id of saved sensor: %d\n", val.val1);
+			}
+			else
+			{
+				printk("id of matched sensor: %d\n", val.val1);
+			}
+			
 		}
+		// else if (flag_get == 3)
+		// {
+		// 	flag_get = 0;
+		// 	printk("match: \n");
+		// 	ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+		// 	if (ret < 0) {
+		// 		LOG_ERR("Could not get sample (%d)", ret);
+		// 		return 0;
+		// 	}
+		// 	printk("id of matched sensor: %d\n", val.val1);
+		// 	//irq_unlock(key);
+		// }
+		
 		k_sleep(K_MSEC(1000));
 		
 	}
@@ -170,6 +221,30 @@ void btn_init()
 			   ret, button1.port->name, button1.pin);
 		return;
 	}
+	// /* ---------------------------------------------------- button fp --------------------------------------------------- */
+	// 	if (!device_is_ready(button_fp.port))
+	// {
+	// 	printk("Error: button device %s is not ready\n",
+	// 		   button_fp.port->name);
+	// 	return;
+	// }
+
+	// ret = gpio_pin_configure_dt(&button_fp, GPIO_INPUT);
+	// if (ret != 0)
+	// {
+	// 	printk("Error %d: failed to configure %s pin %d\n",
+	// 		   ret, button_fp.port->name, button_fp.pin);
+	// 	return;
+	// }
+
+	// ret = gpio_pin_interrupt_configure_dt(&button_fp,
+	// 									  GPIO_INT_EDGE_TO_ACTIVE);
+	// if (ret != 0)
+	// {
+	// 	printk("Error %d: failed to configure interrupt on %s pin %d\n",
+	// 		   ret, button_fp.port->name, button_fp.pin);
+	// 	return;
+	// }
 }
 
 void btn_callback_config()
@@ -181,4 +256,8 @@ void btn_callback_config()
 	gpio_init_callback(&button1_cb_data, button1_pressed, BIT(button1.pin));
 	gpio_add_callback(button1.port, &button1_cb_data);
 	printk("Set up button at %s pin %d\n", button1.port->name, button1.pin);
+
+	// gpio_init_callback(&button_fp_cb_data, button_fp_pressed, BIT(button_fp.pin));
+	// gpio_add_callback(button_fp.port, &button_fp_cb_data);
+	// printk("Set up button at %s pin %d\n", button_fp.port->name, button_fp.pin);
 }
