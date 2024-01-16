@@ -1,0 +1,1 @@
+UWAGA WAŻNE, ABY ZBUDOWAĆ APLIKACJE należy dodać do "Extra Cmake Arguments" coś takiego: -DZEPHYR_EXTRA_MODULES="A:/chinese-fingerprint-based-device/m080r_driver_module" --> ścieżka do modułu zephyr, w którym jest nasz driver

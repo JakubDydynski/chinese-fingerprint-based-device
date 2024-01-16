@@ -11,6 +11,7 @@
 #include <zephyr/drivers/uart.h>
 
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/device.h>
 LOG_MODULE_REGISTER(m080r, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MSG_SIZE_0DATA 22
@@ -30,42 +31,47 @@ static char rx_buf[MSG_SIZE_6DATA];
 static char tx_buf[MSG_SIZE_6DATA];
 static int rx_buf_pos;
 static int current_rx_data_size = MSG_SIZE_0DATA; // global variable needed to handle different size messages
-
-typedef struct  __attribute__((__packed__)){
+static struct gpio_callback int1_cb;
+typedef struct __attribute__((__packed__))
+{
 	uint8_t header[8];
 	uint8_t length[2];
 	uint8_t checksum;
 	// transmission or response
-}frame_header_t;
+} frame_header_t;
 
-typedef struct {
+typedef struct
+{
 	uint8_t password[4];
 	uint8_t command[2];
-	uint8_t* data;
+	uint8_t *data;
 	uint8_t data_len;
 	uint8_t checksum;
-}transmission_frame_t;
+} transmission_frame_t;
 
-typedef struct{
+typedef struct
+{
 	uint8_t password[4];
 	uint8_t command[2];
 	uint8_t error_code[4];
-	uint8_t* data;
+	uint8_t *data;
 	uint8_t checksum;
-}response_frame_t;
+} response_frame_t;
 
- struct m080r_data
- {
-    frame_header_t header;
-    transmission_frame_t content;
-    response_frame_t response;
+struct m080r_data
+{
+	frame_header_t header;
+	transmission_frame_t content;
+	response_frame_t response;
 	int last_id;
- };
+};
 
-
-struct m080r_config {
+struct m080r_config
+{
 	struct gpio_dt_spec int_gpios;
-    struct device * uart;
+	struct gpio_dt_spec pwr_en_gpios;
+	struct device *uart;
+	struct device *m080r_dev;
 };
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        UART                                                        */
@@ -80,9 +86,10 @@ static void print_response(char *buf, int n)
 }
 
 static void send_uart(char *buf, int n, const struct device *const uart_device)
-{	
+{
 	printk("Sending: ");
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < n; i++)
+	{
 		uart_poll_out(uart_device, buf[i]);
 		printk("%02x ", buf[i]);
 	}
@@ -112,39 +119,107 @@ static void serial_cb(const struct device *dev, void *user_data)
 	}
 }
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        GPIO                                                        */
+/* ------------------------------------------------------------------------------------------------------------------ */
+static int m080r_init_int_pin(const struct gpio_dt_spec *pin,
+							  struct gpio_callback *pin_cb,
+							  gpio_callback_handler_t handler)
+{
+	int ret;
+
+	if (!pin->port)
+	{
+		return 0;
+	}
+
+	if (!device_is_ready(pin->port))
+	{
+		printk("%s not ready", pin->port->name);
+		return -ENODEV;
+	}
+
+	gpio_init_callback(pin_cb, handler, BIT(pin->pin));
+
+	ret = gpio_pin_configure_dt(pin, GPIO_INPUT);
+	if (ret)
+	{
+		return ret;
+	}
+
+	ret = gpio_pin_interrupt_configure_dt(pin, GPIO_INT_EDGE_TO_ACTIVE);
+	if (ret)
+	{
+		return ret;
+	}
+
+	ret = gpio_add_callback(pin->port, pin_cb);
+	if (ret)
+	{
+		return ret;
+	}
+	return 0;
+}
+
+static int m080r_init_pwr_en_pin(const struct gpio_dt_spec *pin)
+{
+	int ret;
+
+	if (!device_is_ready(pin->port))
+	{
+		printk("%s not ready", pin->port->name);
+		return -ENODEV;
+	}
+
+	ret = gpio_pin_configure_dt(pin, GPIO_OUTPUT_ACTIVE);
+	if (ret < 0)
+	{
+		return ret;
+	}
+
+	return 0;
+}
+
+static void m080r_int1_callback(const struct device *dev,
+								struct gpio_callback *cb, uint32_t pins)
+{
+	// printk("touch out interrupt\n");
+}
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                   Helper methods                                                   */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 static void prepare_header(struct m080r_data *data, int length)
 {
-// header checksum
-// 82- 11
-// 85 - 8 a więc 
-// 8D - 0
+	// header checksum
+	// 82- 11
+	// 85 - 8 a więc
+	// 8D - 0
 	memcpy(data->header.header, header_init, sizeof(header_init));
 	data->header.length[0] = 0x00;
 	data->header.length[1] = length;
 	data->header.checksum = 0x8D - length; // documentation - header checksum is dependent on length
 }
-#define SENT_HEADER() send_uart((char *)&data->header, sizeof(data->header), uart_device) 
-#define SENT_APP_DATA() \
-do {\
-	send_uart((char *)data->content.password, sizeof(data->content.password), uart_device); \
-	send_uart((char *)data->content.command, sizeof(data->content.command), uart_device);\
-	if (data->content.data_len > 0)\
-	send_uart((char *)data->content.data, data->content.data_len, uart_device);\
-	send_uart((char *)&data->content.checksum, sizeof(data->content.checksum), uart_device);\
-	data->content.checksum = 0;\
-} while(0)
-#define GET_RESPONSE_AND_PRINT() \
-do {\
-	k_msgq_get(&uart_msgq, &tx_buf, K_MSEC(2000));\
-	print_response(tx_buf, current_rx_data_size);\
-} while(0)
+#define SENT_HEADER() send_uart((char *)&data->header, sizeof(data->header), uart_device)
+#define SENT_APP_DATA()                                                                          \
+	do                                                                                           \
+	{                                                                                            \
+		send_uart((char *)data->content.password, sizeof(data->content.password), uart_device);  \
+		send_uart((char *)data->content.command, sizeof(data->content.command), uart_device);    \
+		if (data->content.data_len > 0)                                                          \
+			send_uart((char *)data->content.data, data->content.data_len, uart_device);          \
+		send_uart((char *)&data->content.checksum, sizeof(data->content.checksum), uart_device); \
+		data->content.checksum = 0;                                                              \
+	} while (0)
+#define GET_RESPONSE_AND_PRINT()                       \
+	do                                                 \
+	{                                                  \
+		k_msgq_get(&uart_msgq, &tx_buf, K_MSEC(2000)); \
+		print_response(tx_buf, current_rx_data_size);  \
+	} while (0)
 
-static void set_command(struct m080r_data *data ,int command, int response_length)
+static void set_command(struct m080r_data *data, int command, int response_length)
 {
-	data->content.command[0] = 0x01;	
+	data->content.command[0] = 0x01;
 	data->content.command[1] = command;
 	current_rx_data_size = response_length;
 }
@@ -175,29 +250,30 @@ static void calc_checksum(struct m080r_data *data)
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 static int m080r_sample_fetch(const struct device *dev,
-				      enum sensor_channel chan)
+							  enum sensor_channel chan)
 {
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
-    struct device * uart_device = config->uart;
-	//for testing purposes only
+	struct device *uart_device = config->uart;
+	// for testing purposes only
 	current_rx_data_size = MSG_SIZE_0DATA;
-    send_uart(heartbeat_command, sizeof(heartbeat_command), uart_device);
+	send_uart(heartbeat_command, sizeof(heartbeat_command), uart_device);
 
-    k_msgq_get(&uart_msgq, &tx_buf, K_FOREVER);
-    print_response(tx_buf, MSG_SIZE_0DATA);
+	k_msgq_get(&uart_msgq, &tx_buf, K_FOREVER);
+	print_response(tx_buf, MSG_SIZE_0DATA);
 	return 0;
 }
 
 static int m080r_register_fingerprint(const struct device *dev,
-				     enum sensor_channel chan,
-				     struct sensor_value *val)
+									  enum sensor_channel chan,
+									  struct sensor_value *val)
 {
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
-    struct device * uart_device = config->uart;
+	struct device *uart_device = config->uart;
 
-	if (chan != SENSOR_CHAN_PROX) {
+	if (chan != SENSOR_CHAN_PROX)
+	{
 		return -ENOTSUP;
 	}
 	/* ---------------------------------------------- register fingerprint ---------------------------------------------- */
@@ -226,19 +302,19 @@ static int m080r_register_fingerprint(const struct device *dev,
 	GET_RESPONSE_AND_PRINT();
 	k_sleep(K_MSEC(1000));
 
-	data->last_id = tx_buf[22];  //id of the last registered fingerprint
-	val->val1 = tx_buf[20]; // error code
+	data->last_id = tx_buf[22]; // id of the last registered fingerprint
+	val->val1 = tx_buf[20];		// error code
 
 	return 0;
 }
 static int m080r_fingerprint_save(const struct device *dev,
-					enum sensor_channel chan,
-					enum sensor_attribute attr,
-					struct sensor_value *val)
+								  enum sensor_channel chan,
+								  enum sensor_attribute attr,
+								  struct sensor_value *val)
 {
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
-    struct device * uart_device = config->uart;
+	struct device *uart_device = config->uart;
 
 	/* ------------------------------------------------ save fingerprint ------------------------------------------------ */
 	uint8_t data_buff[] = {0x00, data->last_id}; // id of the last registered fingerprint
@@ -270,14 +346,14 @@ static int m080r_fingerprint_save(const struct device *dev,
 	return 0;
 }
 static int m080r_match_fingerprint(const struct device *dev,
-					enum sensor_channel chan,
-					enum sensor_attribute attr,
-					struct sensor_value *val)
+								   enum sensor_channel chan,
+								   enum sensor_attribute attr,
+								   struct sensor_value *val)
 {
 
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
-    struct device * uart_device = config->uart;
+	struct device *uart_device = config->uart;
 
 	/* ------------------------------------------------ match fingerprint ----------------------------------------------- */
 
@@ -291,7 +367,7 @@ static int m080r_match_fingerprint(const struct device *dev,
 	GET_RESPONSE_AND_PRINT();
 
 	k_sleep(K_MSEC(1000));
-	
+
 	/* --------------------------------------------- query matching results --------------------------------------------- */
 
 	int command = 0x22;
@@ -312,32 +388,57 @@ static int m080r_match_fingerprint(const struct device *dev,
 }
 
 static int m080r_sleep(const struct device *dev,
-				    const struct sensor_trigger *trig,
-				    sensor_trigger_handler_t handler)
+					   const struct sensor_trigger *trig,
+					   sensor_trigger_handler_t handler)
 {
 
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
-    struct device * uart_device = config->uart;
+	struct device *uart_device = config->uart;
+	uint8_t data_buff[] = {0x00};
 	(void)trig;
 	(void)handler;
 
 	/* ------------------------------------------------ sleep fingerprint ----------------------------------------------- */
+	switch (trig->type)
+	{
+	case SENSOR_TRIG_DATA_READY:
+		printk("sending normal sleep command\n");
+		prepare_header(data, 0x08);
+		// set_command(data, 0x21, MSG_SIZE_0DATA);
+		data->content.command[0] = 0x02;
+		data->content.command[1] = 0x0C;
+		current_rx_data_size = MSG_SIZE_0DATA;
+		data_buff[0] = 0x00;
+		set_data(data, data_buff, sizeof(data_buff));
+		calc_checksum(data);
 
-	prepare_header(data, 0x08);
-	// set_command(data, 0x21, MSG_SIZE_0DATA);
-	data->content.command[0] = 0x02;	
-	data->content.command[1] = 0x0C;
-	current_rx_data_size = MSG_SIZE_0DATA;
-	uint8_t data_buff[] = {0x00};
-	set_data(data, data_buff, sizeof(data_buff));
-	calc_checksum(data);
+		SENT_HEADER();
+		SENT_APP_DATA();
+		GET_RESPONSE_AND_PRINT();
 
-	SENT_HEADER();
-	SENT_APP_DATA();
-	GET_RESPONSE_AND_PRINT();
+		k_sleep(K_MSEC(1000));
+		return 0;
+	case SENSOR_TRIG_TIMER:
+		printk("sending deep sleep command\n");
+		prepare_header(data, 0x08);
+		// set_command(data, 0x21, MSG_SIZE_0DATA);
+		data->content.command[0] = 0x02;
+		data->content.command[1] = 0x0C;
+		current_rx_data_size = MSG_SIZE_0DATA;
+		data_buff[0] = 0x01;
+		set_data(data, data_buff, sizeof(data_buff));
+		calc_checksum(data);
 
-	k_sleep(K_MSEC(1000));
+		SENT_HEADER();
+		SENT_APP_DATA();
+		GET_RESPONSE_AND_PRINT();
+
+		k_sleep(K_MSEC(1000));
+		return 0;
+	default:
+		return -ENOTSUP;
+	}
 	return 0;
 }
 
@@ -351,30 +452,77 @@ static const struct sensor_driver_api m080r_api = {
 
 static int m080r_init(const struct device *dev)
 {
-	const struct m080r_config *config = dev->config;
-
-    if(!device_is_ready(config->uart)){
-        LOG_ERR("UART device not ready!");
-        return -ENODEV;
-    }
+	int ret;
+	struct m080r_config *config = dev->config;
+	if (!device_is_ready(config->uart))
+	{
+		LOG_ERR("UART device not ready!");
+		return -ENODEV;
+	}
 
 	uart_irq_callback_user_data_set(config->uart, serial_cb, NULL);
 	uart_irq_rx_enable(config->uart);
 
+	ret = m080r_init_int_pin(&config->int_gpios, &int1_cb, m080r_int1_callback);
+	printk("m080r_init_int_pin: %d\n", ret);
+	ret = m080r_init_pwr_en_pin(&config->pwr_en_gpios);
+	printk("m080r_init_pwr_en_pin: %d\n", ret);
+
 	return 0;
 }
 
-#define M080R_INIT(i)						       					\
-	static struct m080r_data m080r_data_##i;	       				\
-									       							\
-	static const struct m080r_config m080r_config_##i = {  			\
-		.uart = DEVICE_DT_GET(DT_INST_PHANDLE(i,uart_node)),		\
-		.int_gpios = GPIO_DT_SPEC_INST_GET(i, irq_gpios),			\
-	};								       							\
-									       							\
-	DEVICE_DT_INST_DEFINE(i, m080r_init, NULL,		       			\
-			      &m080r_data_##i,			       					\
-			      &m080r_config_##i, POST_KERNEL,	       			\
-			      CONFIG_SENSOR_INIT_PRIORITY, &m080r_api);
+static int m080r_driver_pm_action(const struct device *dev,
+								  enum pm_device_action action)
+{
+	struct m080r_config *config = dev->config;
+	switch (action)
+	{
+	case PM_DEVICE_ACTION_SUSPEND:
+		/* suspend the device */
+		printk("m080r_driver_pm_action: suspend\n");
+		// m080r_sleep(dev, NULL, NULL);
+		// write transistor pin to high
+		gpio_pin_set_dt(&config->pwr_en_gpios, 0);
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		/* resume the device */
+		// write transistor pin to low
+		printk("m080r_driver_pm_action: resume\n");
+		gpio_pin_set_dt(&config->pwr_en_gpios, 1);
+		break;
+	case PM_DEVICE_ACTION_TURN_ON:
+		/*
+		 * powered on the device, used when the power
+		 * domain this device belongs is resumed.
+		 */
+
+		break;
+	case PM_DEVICE_ACTION_TURN_OFF:
+		/*
+		 * power off the device, used when the power
+		 * domain this device belongs is suspended.
+		 */
+
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+#define M080R_INIT(i)                                                         \
+	static struct m080r_data m080r_data_##i;                                  \
+                                                                              \
+	static const struct m080r_config m080r_config_##i = {                     \
+		.uart = DEVICE_DT_GET(DT_INST_PHANDLE(i, uart_node)),                 \
+		.int_gpios = GPIO_DT_SPEC_INST_GET_BY_IDX_OR(i, irq_gpios, 0, {}),    \
+		.pwr_en_gpios = GPIO_DT_SPEC_INST_GET_BY_IDX_OR(i, irq_gpios, 1, {}), \
+	};                                                                        \
+	PM_DEVICE_DT_INST_DEFINE(i, m080r_driver_pm_action);                      \
+	DEVICE_DT_INST_DEFINE(i, m080r_init, PM_DEVICE_DT_INST_GET(i),            \
+						  &m080r_data_##i,                                    \
+						  &m080r_config_##i, POST_KERNEL,                     \
+						  CONFIG_SENSOR_INIT_PRIORITY, &m080r_api);
 
 DT_INST_FOREACH_STATUS_OKAY(M080R_INIT)

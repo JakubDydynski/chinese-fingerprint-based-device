@@ -1,0 +1,28 @@
+scenariusze testowe:
+
+1. start programu
+2. brak usypiania czujnika
+3. po naciśnięciu przycisku - wykonanie matchowania
+x2
+4.koniec
+
+1. start programu
+2. uśpienie czujnika poprzez odcięcie 3v3
+3. po naciśnięciu przycisku wybudzenie i wykonanie matchowania
+4. uśpienie po wykonaniu matchowania
+x2
+5.koniec
+
+1. start programu
+2. uśpienie czujnika poprzez odcięcie 3v3 i wysłanie komendy NORMAL SLEEP przed odcięciem
+3. po naciśnięciu przycisku wybudzenie i wykonanie matchowania
+4. uśpienie automatyczne po wykonaniu matchowania
+x2
+5.koniec
+
+1. start programu
+2. uśpienie czujnika poprzez odcięcie 3v3 i wysłanie komendy DEEP SLEEP przed odcięciem
+3. po naciśnięciu przycisku wybudzenie i wykonanie matchowania
+4. uśpienie automatyczne po wykonaniu matchowania
+x2
+5.koniec

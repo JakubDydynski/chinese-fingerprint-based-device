@@ -14,8 +14,8 @@ properties:
     type: phandle
     required: true
     description: |
-      The INT1 and (optional) INT2 signal connections.
+      The uart used to communicate with the sensor.
   irq-gpios:
     type: phandle-array
     description: |
-          The INT1 and (optional) INT2 signal connections.
+          The TOUCH_OUT and PWR_EN (PNP Transistor) signal connections.
