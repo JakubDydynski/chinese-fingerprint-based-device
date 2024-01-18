@@ -119,16 +119,16 @@ static const m080r_command_t cmd_tab[]= {
 		{CMD_SLEEP, MSG_SIZE_0DATA},
 };
 
+static int m080r_register_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_save_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_match_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_sleep(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
 static const sensor_action_t sensor_action[] = {
  	m080r_register_fingerprint,
  	m080r_save_fingerprint,
  	m080r_match_fingerprint,
  	m080r_sleep,
 };
-static int m080r_register_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
-static int m080r_save_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
-static int m080r_match_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
-static int m080r_sleep(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        UART                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -426,7 +426,8 @@ static int m080r_match_fingerprint(const struct device *dev, enum sensor_attribu
 
 	k_sleep(K_MSEC(1000));
 
-	val->val1 = tx_buf[24]; // id of fingerprint
+	val->val1 = tx_buf[26]; // id of fingerprint
+	val->val2 = tx_buf[22]; // matching result
 
 	return 0;
 }

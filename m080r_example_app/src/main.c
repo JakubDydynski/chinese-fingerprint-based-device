@@ -92,7 +92,7 @@ void main(void)
 				LOG_ERR("Could not get sample (%d)", ret);
 				return 0;
 			}
-			if (val.val1 == 0)
+			if (val.val2 != 1)
 			{
 				printk("no match\n");
 				printk("register: \n");
