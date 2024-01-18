@@ -5,6 +5,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
+#include "m080r.h"
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
 
 /* size of stack area used by each thread */
@@ -79,15 +80,14 @@ void main(void)
 		if (flag_get == 1) {
 			flag_get = 0;
 			// pm_device_action_run(sensor, state_suspend);
-				struct sensor_trigger trig = { .type = SENSOR_TRIG_DATA_READY};
 				k_msleep(1000);
-				sensor_trigger_set(sensor, &trig, NULL);
+				sensor_attr_set(sensor, SENSOR_CHAN_SLEEP, SENSOR_ATTR_NORMAL_SLEEP, &val);
 		}
 		else if (flag_get == 2)
 		{
 			flag_get = 0;
 			printk("match: \n");
-			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			ret = sensor_attr_set(sensor, SENSOR_CHAN_MATCH_FINGERPRINT, SENSOR_ATTR_MAX, &val);
 			if (ret < 0) {
 				LOG_ERR("Could not get sample (%d)", ret);
 				return 0;
@@ -96,14 +96,14 @@ void main(void)
 			{
 				printk("no match\n");
 				printk("register: \n");
-				ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
+				ret = sensor_attr_set(sensor, SENSOR_CHAN_REGISTER_FINGERPRINT, SENSOR_ATTR_MAX, &val);
 				if (ret < 0) {
 					LOG_ERR("Could not get sample (%d)", ret);
 					return 0;
 				}
 
 				printk("save: \n");
-				ret = sensor_attr_set(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+				ret = sensor_attr_set(sensor, SENSOR_CHAN_SAVE_FINGERPRINT, SENSOR_ATTR_MAX, &val);
 				if (ret < 0) {
 					LOG_ERR("Could not get sample (%d)", ret);
 					return 0;

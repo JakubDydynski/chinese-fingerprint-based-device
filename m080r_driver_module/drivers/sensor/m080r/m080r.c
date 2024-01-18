@@ -14,6 +14,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
+#include "m080r.h"
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       Defines                                                      */
@@ -46,20 +47,6 @@ typedef enum {
 	CMD_MATCH_FINGERPRINT_QUERY_ID,
 	CMD_SLEEP_ID,
 } m080r_cmd_id_t;
-
-typedef enum {
-	SENSOR_CHAN_M080R_START = SENSOR_CHAN_PRIV_START,
-	SENSOR_CHAN_REGISTER_FINGERPRINT,
-	SENSOR_CHAN_MATCH_FINGERPRINT,
-	SENSOR_CHAN_SAVE_FINGERPRINT,
-	SENSOR_CHAN_SLEEP,
-} m080r_channels_t;
-
-typedef enum {
-	SENSOR_ATTR_M080R_START = SENSOR_ATTR_PRIV_START,
-	SENSOR_ATTR_NORMAL_SLEEP,
-	SENSOR_ATTR_DEEP_SLEEP,
-} m080r_attr_t;
 
 typedef struct m080r_command
 {
@@ -107,6 +94,7 @@ struct m080r_config
 	struct device *uart;
 	struct device *m080r_dev;
 };
+typedef int (*sensor_action_t)(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                     Global data                                                    */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -130,6 +118,17 @@ static const m080r_command_t cmd_tab[]= {
 		{CMD_MATCH_FINGERPRINT_QUERY, MSG_SIZE_6DATA},
 		{CMD_SLEEP, MSG_SIZE_0DATA},
 };
+
+static const sensor_action_t sensor_action[] = {
+ 	m080r_register_fingerprint,
+ 	m080r_save_fingerprint,
+ 	m080r_match_fingerprint,
+ 	m080r_sleep,
+};
+static int m080r_register_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_save_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_match_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
+static int m080r_sleep(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val);
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        UART                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -319,18 +318,27 @@ static int m080r_heartbeat(const struct device *dev,
 	return 0;
 }
 
-static int m080r_register_fingerprint(const struct device *dev,
-									  enum sensor_channel chan,
-									  struct sensor_value *val)
+static int m080r_fingerprint_action(const struct device *dev,
+								  enum sensor_channel chan,
+								  enum sensor_attribute attr,
+								  struct sensor_value *val)
+{
+	if (chan < SENSOR_CHAN_M080R_START || chan > SENSOR_CHAN_SLEEP)
+	{
+		return -ENOTSUP;
+	}
+	// if (attr < SENSOR_ATTR_M080R_START || attr > SENSOR_ATTR_DEEP_SLEEP)
+	// {
+	// 	return -ENOTSUP;
+	// }
+	return sensor_action[chan - SENSOR_CHAN_M080R_START](dev, attr, val);
+}
+
+static int m080r_register_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val)
 {
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
-
-	if (chan != SENSOR_CHAN_PROX)
-	{
-		return -ENOTSUP;
-	}
 
 	for (uint8_t i = 1; i < 7; i++)
 	{
@@ -360,13 +368,9 @@ static int m080r_register_fingerprint(const struct device *dev,
 
 	return 0;
 }
-
-static int m080r_fingerprint_save(const struct device *dev,
-								  enum sensor_channel chan,
-								  enum sensor_attribute attr,
-								  struct sensor_value *val)
+static int m080r_save_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val)
 {
-	const struct m080r_config *config = dev->config;
+		const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
 
@@ -395,10 +399,7 @@ static int m080r_fingerprint_save(const struct device *dev,
 
 	return 0;
 }
-static int m080r_match_fingerprint(const struct device *dev,
-								   enum sensor_channel chan,
-								   enum sensor_attribute attr,
-								   struct sensor_value *val)
+static int m080r_match_fingerprint(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val)
 {
 
 	const struct m080r_config *config = dev->config;
@@ -430,16 +431,14 @@ static int m080r_match_fingerprint(const struct device *dev,
 	return 0;
 }
 
-static int m080r_sleep(const struct device *dev,
-					   const struct sensor_trigger *trig,
-					   sensor_trigger_handler_t handler)
+static int m080r_sleep(const struct device *dev, enum sensor_attribute attr, struct sensor_value *val)
 {
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
 	uint8_t data_buff[] = {0x00};
-
-	(void)handler;
+	data_buff[0] = attr == SENSOR_ATTR_NORMAL_SLEEP ? 0x00 : 0x01;
+	
 	prepare_header(data, sizeof(data_buff));
 	set_command(data, CMD_SLEEP_ID);
 	set_data(data, data_buff);
@@ -454,10 +453,7 @@ static int m080r_sleep(const struct device *dev,
 
 static const struct sensor_driver_api m080r_api = {
 	.sample_fetch = &m080r_heartbeat,
-	.channel_get = &m080r_register_fingerprint,
-	.attr_get = &m080r_match_fingerprint,
-	.attr_set = &m080r_fingerprint_save,
-	.trigger_set = &m080r_sleep,
+	.attr_set = &m080r_fingerprint_action,
 };
 
 static int m080r_init(const struct device *dev)
