@@ -3,41 +3,75 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT chinese_m080r
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      Includes                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/uart.h>
-
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
-LOG_MODULE_REGISTER(m080r, CONFIG_SENSOR_LOG_LEVEL);
 
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       Defines                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+#define DT_DRV_COMPAT chinese_m080r
 #define MSG_SIZE_0DATA 22
 #define MSG_SIZE_3DATA (22 + 3)
 #define MSG_SIZE_6DATA (22 + 6)
 #define MSG_SIZE_2DATA (22 + 2)
-/* queue to store up to 10 messages (aligned to 4-byte boundary) */
-K_MSGQ_DEFINE(uart_msgq, MSG_SIZE_6DATA, 10, 4);
+#define CMD_GROUP1 0x0100U
+#define CMD_GROUP2 0x0200U
+#define CMD_REGISTER_FINGERPRINT 		(CMD_GROUP1 + 0x11U)
+#define CMD_REGISTER_FINGERPRINT_QUERY  (CMD_GROUP1 + 0x12U)
+#define CMD_SAVE_FINGERPRINT 			(CMD_GROUP1 + 0x13U)
+#define CMD_SAVE_FINGERPRINT_QUERY  	(CMD_GROUP1 + 0x14U)
+#define CMD_MATCH_FINGERPRINT 			(CMD_GROUP1 + 0x21U)
+#define CMD_MATCH_FINGERPRINT_QUERY 	(CMD_GROUP1 + 0x22U)
+#define CMD_SLEEP 						(CMD_GROUP2 + 0x0CU)
 
-static char heartbeat_command[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
-static const char header_init[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A};
-/*
- * send a null-terminated string character by character to the UART interface
- */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        Types                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+typedef enum {
+	CMD_REGISTER_FINGERPRINT_ID,
+	CMD_REGISTER_FINGERPRINT_QUERY_ID,
+	CMD_SAVE_FINGERPRINT_ID,
+	CMD_SAVE_FINGERPRINT_QUERY_ID,
+	CMD_MATCH_FINGERPRINT_ID,
+	CMD_MATCH_FINGERPRINT_QUERY_ID,
+	CMD_SLEEP_ID,
+} m080r_cmd_id_t;
 
-static char rx_buf[MSG_SIZE_6DATA];
-static char tx_buf[MSG_SIZE_6DATA];
-static int rx_buf_pos;
-static int current_rx_data_size = MSG_SIZE_0DATA; // global variable needed to handle different size messages
-static struct gpio_callback int1_cb;
+typedef enum {
+	SENSOR_CHAN_M080R_START = SENSOR_CHAN_PRIV_START,
+	SENSOR_CHAN_REGISTER_FINGERPRINT,
+	SENSOR_CHAN_MATCH_FINGERPRINT,
+	SENSOR_CHAN_SAVE_FINGERPRINT,
+	SENSOR_CHAN_SLEEP,
+} m080r_channels_t;
+
+typedef enum {
+	SENSOR_ATTR_M080R_START = SENSOR_ATTR_PRIV_START,
+	SENSOR_ATTR_NORMAL_SLEEP,
+	SENSOR_ATTR_DEEP_SLEEP,
+} m080r_attr_t;
+
+typedef struct m080r_command
+{
+	uint16_t cmd_id;
+	uint8_t msg_size;
+}m080r_command_t;
+
 typedef struct __attribute__((__packed__))
 {
 	uint8_t header[8];
 	uint8_t length[2];
 	uint8_t checksum;
-	// transmission or response
 } frame_header_t;
 
 typedef struct
@@ -74,6 +108,29 @@ struct m080r_config
 	struct device *m080r_dev;
 };
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                     Global data                                                    */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* queue to store up to 10 messages (aligned to 4-byte boundary) */
+K_MSGQ_DEFINE(uart_msgq, MSG_SIZE_6DATA, 10, 4);
+LOG_MODULE_REGISTER(m080r, CONFIG_SENSOR_LOG_LEVEL);
+
+static const char heartbeat_command[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
+static const char header_init[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A};
+static char rx_buf[MSG_SIZE_6DATA];
+static char tx_buf[MSG_SIZE_6DATA];
+static int rx_buf_pos;
+static int current_rx_data_size = MSG_SIZE_0DATA; // global variable needed to handle different size messages
+static struct gpio_callback int1_cb;
+static const m080r_command_t cmd_tab[]= {
+		{CMD_REGISTER_FINGERPRINT, MSG_SIZE_0DATA},
+		{CMD_REGISTER_FINGERPRINT_QUERY, MSG_SIZE_3DATA},
+		{CMD_SAVE_FINGERPRINT, MSG_SIZE_0DATA},
+		{CMD_SAVE_FINGERPRINT_QUERY, MSG_SIZE_2DATA},
+		{CMD_MATCH_FINGERPRINT, MSG_SIZE_0DATA},
+		{CMD_MATCH_FINGERPRINT_QUERY, MSG_SIZE_6DATA},
+		{CMD_SLEEP, MSG_SIZE_0DATA},
+};
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        UART                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 static void print_response(char *buf, int n)
@@ -101,13 +158,10 @@ static void serial_cb(const struct device *dev, void *user_data)
 	uint8_t c;
 
 	if (!uart_irq_update(dev))
-	{
 		return;
-	}
 
 	while (uart_irq_rx_ready(dev))
 	{
-
 		uart_fifo_read(dev, &c, 1);
 		rx_buf[rx_buf_pos++] = c;
 
@@ -121,6 +175,7 @@ static void serial_cb(const struct device *dev, void *user_data)
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        GPIO                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
+
 static int m080r_init_int_pin(const struct gpio_dt_spec *pin,
 							  struct gpio_callback *pin_cb,
 							  gpio_callback_handler_t handler)
@@ -184,21 +239,11 @@ static void m080r_int1_callback(const struct device *dev,
 {
 	// printk("touch out interrupt\n");
 }
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                   Helper methods                                                   */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-static void prepare_header(struct m080r_data *data, int length)
-{
-	// header checksum
-	// 82- 11
-	// 85 - 8 a więc
-	// 8D - 0
-	memcpy(data->header.header, header_init, sizeof(header_init));
-	data->header.length[0] = 0x00;
-	data->header.length[1] = length;
-	data->header.checksum = 0x8D - length; // documentation - header checksum is dependent on length
-}
 #define SENT_HEADER() send_uart((char *)&data->header, sizeof(data->header), uart_device)
 #define SENT_APP_DATA()                                                                          \
 	do                                                                                           \
@@ -217,20 +262,30 @@ static void prepare_header(struct m080r_data *data, int length)
 		print_response(tx_buf, current_rx_data_size);  \
 	} while (0)
 
-static void set_command(struct m080r_data *data, int command, int response_length)
+	
+static void prepare_header(struct m080r_data *data, int data_length)
 {
-	data->content.command[0] = 0x01;
-	data->content.command[1] = command;
-	current_rx_data_size = response_length;
+	data->content.data_len = data_length;
+	memcpy(data->header.header, header_init, sizeof(header_init));
+	data_length += sizeof(data->content.password) + sizeof(data->content.command) + sizeof(data->content.checksum); // documenation
+	data->header.length[0] = data_length >> 8;
+	data->header.length[1] = data_length;
+	data->header.checksum = 0x8D - data_length; // documentation - header checksum is dependent on length
 }
 
-static void set_data(struct m080r_data *data, uint8_t *data_buff, int data_length)
+static void set_command(struct m080r_data *data, m080r_cmd_id_t cdm_id)
+{
+	data->content.command[0] = cmd_tab[cdm_id].cmd_id >> 8;
+	data->content.command[1] = cmd_tab[cdm_id].cmd_id;
+	current_rx_data_size = cmd_tab[cdm_id].msg_size;
+}
+
+static inline void set_data(struct m080r_data *data, uint8_t *data_buff)
 {
 	data->content.data = data_buff;
-	data->content.data_len = data_length;
 }
 
-static void calc_checksum(struct m080r_data *data)
+static void set_checksum(struct m080r_data *data)
 {
 	for (int i = 0; i < sizeof(data->content.password); i++)
 	{
@@ -249,7 +304,7 @@ static void calc_checksum(struct m080r_data *data)
 /*                                               Fingerprint sensor api                                               */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-static int m080r_sample_fetch(const struct device *dev,
+static int m080r_heartbeat(const struct device *dev,
 							  enum sensor_channel chan)
 {
 	const struct m080r_config *config = dev->config;
@@ -276,27 +331,25 @@ static int m080r_register_fingerprint(const struct device *dev,
 	{
 		return -ENOTSUP;
 	}
-	/* ---------------------------------------------- register fingerprint ---------------------------------------------- */
-	prepare_header(data, 0x08);
 
 	for (uint8_t i = 1; i < 7; i++)
 	{
-		set_command(data, 0x11, MSG_SIZE_0DATA); // TODO: zamiast 0x11 wstawic jakies enumy z komendami, wtedy też msg_size mozna by ogarnąć
 		uint8_t data_buff[] = {i};
-		set_data(data, data_buff, sizeof(data_buff));
-		calc_checksum(data);
+		prepare_header(data, sizeof(data_buff));
+		set_command(data, CMD_REGISTER_FINGERPRINT_ID);
+		set_data(data, data_buff);
+		set_checksum(data);
 
 		SENT_HEADER();
 		SENT_APP_DATA();
 		GET_RESPONSE_AND_PRINT();
 		k_sleep(K_MSEC(1000));
 	}
-	/* --------------------------------------------- query register results --------------------------------------------- */
-	prepare_header(data, 0x07);
-	set_command(data, 0x12, MSG_SIZE_3DATA);
-	set_data(data, NULL, 0);
-	calc_checksum(data);
 
+	prepare_header(data, 0);
+	set_command(data, CMD_REGISTER_FINGERPRINT_QUERY_ID);
+	set_data(data, NULL);
+	set_checksum(data);
 	SENT_HEADER();
 	SENT_APP_DATA();
 	GET_RESPONSE_AND_PRINT();
@@ -307,6 +360,7 @@ static int m080r_register_fingerprint(const struct device *dev,
 
 	return 0;
 }
+
 static int m080r_fingerprint_save(const struct device *dev,
 								  enum sensor_channel chan,
 								  enum sensor_attribute attr,
@@ -316,32 +370,28 @@ static int m080r_fingerprint_save(const struct device *dev,
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
 
-	/* ------------------------------------------------ save fingerprint ------------------------------------------------ */
 	uint8_t data_buff[] = {0x00, data->last_id}; // id of the last registered fingerprint
-	prepare_header(data, 0x09);
-	set_command(data, 0x13, MSG_SIZE_0DATA);
-	set_data(data, data_buff, sizeof(data_buff));
-	calc_checksum(data);
-
-	SENT_HEADER();
-	SENT_APP_DATA();
-	GET_RESPONSE_AND_PRINT();
-
-	k_sleep(K_MSEC(1000));
-	/* ------------------------------------------------ query save result ----------------------------------------------- */
-
-	prepare_header(data, 0x07);
-	set_command(data, 0x14, MSG_SIZE_2DATA);
-	set_data(data, NULL, 0);
-	calc_checksum(data);
-
+	prepare_header(data, sizeof(data_buff));
+	set_command(data, CMD_SAVE_FINGERPRINT_ID);
+	set_data(data, data_buff);
+	set_checksum(data);
 	SENT_HEADER();
 	SENT_APP_DATA();
 	GET_RESPONSE_AND_PRINT();
 
 	k_sleep(K_MSEC(1000));
 
-	val->val1 = tx_buf[22]; // id of sensor
+	prepare_header(data, 0);
+	set_command(data, CMD_SAVE_FINGERPRINT_QUERY_ID);
+	set_data(data, NULL);
+	set_checksum(data);
+	SENT_HEADER();
+	SENT_APP_DATA();
+	GET_RESPONSE_AND_PRINT();
+
+	k_sleep(K_MSEC(1000));
+
+	val->val1 = tx_buf[22]; // id of fingerprint
 
 	return 0;
 }
@@ -355,27 +405,20 @@ static int m080r_match_fingerprint(const struct device *dev,
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
 
-	/* ------------------------------------------------ match fingerprint ----------------------------------------------- */
-
-	prepare_header(data, 0x07);
-	set_command(data, 0x21, MSG_SIZE_0DATA);
-	set_data(data, NULL, 0);
-	calc_checksum(data);
-
+	prepare_header(data, 0);
+	set_command(data, CMD_MATCH_FINGERPRINT_ID);
+	set_data(data, NULL);
+	set_checksum(data);
 	SENT_HEADER();
 	SENT_APP_DATA();
 	GET_RESPONSE_AND_PRINT();
 
 	k_sleep(K_MSEC(1000));
 
-	/* --------------------------------------------- query matching results --------------------------------------------- */
-
-	int command = 0x22;
-	int length = 0x07;
-	prepare_header(data, 0x07);
-	set_command(data, 0x22, MSG_SIZE_6DATA);
-	set_data(data, NULL, 0);
-	calc_checksum(data);
+	prepare_header(data, 0);
+	set_command(data, CMD_MATCH_FINGERPRINT_QUERY_ID);
+	set_data(data, NULL);
+	set_checksum(data);
 	SENT_HEADER();
 	SENT_APP_DATA();
 	GET_RESPONSE_AND_PRINT();
@@ -391,59 +434,26 @@ static int m080r_sleep(const struct device *dev,
 					   const struct sensor_trigger *trig,
 					   sensor_trigger_handler_t handler)
 {
-
 	const struct m080r_config *config = dev->config;
 	struct m080r_data *data = dev->data;
 	struct device *uart_device = config->uart;
 	uint8_t data_buff[] = {0x00};
-	(void)trig;
+
 	(void)handler;
+	prepare_header(data, sizeof(data_buff));
+	set_command(data, CMD_SLEEP_ID);
+	set_data(data, data_buff);
+	set_checksum(data);
+	SENT_HEADER();
+	SENT_APP_DATA();
+	GET_RESPONSE_AND_PRINT();
 
-	/* ------------------------------------------------ sleep fingerprint ----------------------------------------------- */
-	switch (trig->type)
-	{
-	case SENSOR_TRIG_DATA_READY:
-		printk("sending normal sleep command\n");
-		prepare_header(data, 0x08);
-		// set_command(data, 0x21, MSG_SIZE_0DATA);
-		data->content.command[0] = 0x02;
-		data->content.command[1] = 0x0C;
-		current_rx_data_size = MSG_SIZE_0DATA;
-		data_buff[0] = 0x00;
-		set_data(data, data_buff, sizeof(data_buff));
-		calc_checksum(data);
-
-		SENT_HEADER();
-		SENT_APP_DATA();
-		GET_RESPONSE_AND_PRINT();
-
-		k_sleep(K_MSEC(1000));
-		return 0;
-	case SENSOR_TRIG_TIMER:
-		printk("sending deep sleep command\n");
-		prepare_header(data, 0x08);
-		// set_command(data, 0x21, MSG_SIZE_0DATA);
-		data->content.command[0] = 0x02;
-		data->content.command[1] = 0x0C;
-		current_rx_data_size = MSG_SIZE_0DATA;
-		data_buff[0] = 0x01;
-		set_data(data, data_buff, sizeof(data_buff));
-		calc_checksum(data);
-
-		SENT_HEADER();
-		SENT_APP_DATA();
-		GET_RESPONSE_AND_PRINT();
-
-		k_sleep(K_MSEC(1000));
-		return 0;
-	default:
-		return -ENOTSUP;
-	}
+	k_sleep(K_MSEC(1000));
 	return 0;
 }
 
 static const struct sensor_driver_api m080r_api = {
-	.sample_fetch = &m080r_sample_fetch,
+	.sample_fetch = &m080r_heartbeat,
 	.channel_get = &m080r_register_fingerprint,
 	.attr_get = &m080r_match_fingerprint,
 	.attr_set = &m080r_fingerprint_save,

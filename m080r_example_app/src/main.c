@@ -1,9 +1,3 @@
-/*
- * Copyright (c) 2016 Intel Corporation
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/sensor.h>
@@ -12,9 +6,6 @@
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
-
-/* 1000 msec = 1 sec */
-#define SLEEP_TIME_MS 5000
 
 /* size of stack area used by each thread */
 #define STACKSIZE 1024
@@ -32,7 +23,6 @@ static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,
 static struct gpio_callback button0_cb_data, button1_cb_data;
 int ret;
 const struct device *sensor;
-unsigned int key;
 int flag_get = 0;
 
 void button1_pressed(const struct device *dev, struct gpio_callback *cb,
@@ -88,7 +78,10 @@ void main(void)
 		struct sensor_value val;
 		if (flag_get == 1) {
 			flag_get = 0;
-			pm_device_action_run(sensor, state_suspend);
+			// pm_device_action_run(sensor, state_suspend);
+				struct sensor_trigger trig = { .type = SENSOR_TRIG_DATA_READY};
+				k_msleep(1000);
+				sensor_trigger_set(sensor, &trig, NULL);
 		}
 		else if (flag_get == 2)
 		{
@@ -102,7 +95,7 @@ void main(void)
 			if (val.val1 == 0)
 			{
 				printk("no match\n");
-							printk("register: \n");
+				printk("register: \n");
 				ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
 				if (ret < 0) {
 					LOG_ERR("Could not get sample (%d)", ret);
