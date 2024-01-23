@@ -11,6 +11,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
+#include "m080r.h"
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
 
 /* 1000 msec = 1 sec */
@@ -32,7 +33,6 @@ int ret;
 const struct device *sensor;
 unsigned int key;
 int flag_get = 0;
-
 
 void button0_pressed(const struct device *dev, struct gpio_callback *cb,
 					 uint32_t pins)
@@ -61,31 +61,29 @@ void main(void)
 
 	sensor = DEVICE_DT_GET(DT_NODELABEL(m080r0));
 
-	if (!device_is_ready(sensor)) {
+	if (!device_is_ready(sensor))
+	{
 		printk("Sensor not ready");
-	} else {
+	}
+	else
+	{
 		printk("SENDOR READY!\n");
 	}
 
-	enum pm_device_state *state;
-	enum pm_device_action state_suspend = PM_DEVICE_ACTION_SUSPEND;
-
-	
-
-	while (1) {
+	while (1)
+	{
 
 		struct sensor_value val;
-		if (flag_get == 1) {
+		if (flag_get == 1)
+		{
 			flag_get = 0;
 			printk("match: \n");
-			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			ret = sensor_attr_set(sensor, SENSOR_CHAN_MATCH_FINGERPRINT, SENSOR_ATTR_MAX, &val);
 			printk("id of matched sensor: %d\n", val.val1);
 		}
 		k_sleep(K_MSEC(1000));
-		
 	}
 }
-
 
 void btn_init()
 {

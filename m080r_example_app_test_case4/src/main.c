@@ -11,6 +11,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
+#include "m080r.h"
 LOG_MODULE_REGISTER(logging_blog, LOG_LEVEL_DBG);
 
 /* 1000 msec = 1 sec */
@@ -85,9 +86,9 @@ void main(void)
 			k_msleep(100);
 			flag_get = 0;
 			printk("match: \n");
-			ret = sensor_attr_get(sensor, SENSOR_CHAN_PROX, SENSOR_ATTR_MAX, &val);
+			ret = sensor_attr_set(sensor, SENSOR_CHAN_MATCH_FINGERPRINT, SENSOR_ATTR_MAX, &val);
 			printk("id of matched sensor: %d\n", val.val1);
-			sensor_trigger_set(sensor, &trig, NULL);
+			ret = sensor_attr_set(sensor, SENSOR_CHAN_SLEEP, SENSOR_ATTR_DEEP_SLEEP, &val);
 			k_msleep(100);
 			pm_device_action_run(sensor, state_suspend);
 		}
